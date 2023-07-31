@@ -1,11 +1,9 @@
 use crate::protocol::Message;
 use crate::Opts;
-use blake3::Hash;
 use chrono::prelude::*;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use std::net::SocketAddr;
 use std::path::Path;
-use std::ffi::OsString;
 
 use hydroflow::hydroflow_syntax;
 use hydroflow::util::{UdpSink, UdpStream};

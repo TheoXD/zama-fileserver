@@ -1,4 +1,4 @@
-use bromberg_sl2::{*, digest::{generic_array, consts::U64}};
+use bromberg_sl2::*;
 use serde::{Serialize, Deserialize};
 use core::mem::{transmute};
 use std::path::Path;
