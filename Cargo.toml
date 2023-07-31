@@ -12,3 +12,4 @@ serde = { version = "1", features = [ "derive" ] }
 chrono = { version = "0.4.20", features = [ "serde" ], default-features = true }
 blake3 = "1.4.1"
 tokio = {version = "1.29.1"}
+bromberg_sl2 = { git = "https://github.com/zed-industries/bromberg_sl2.git", features = ["std"] }

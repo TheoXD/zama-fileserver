@@ -8,6 +8,7 @@ use hydroflow::util::{bind_udp_bytes, ipv4_resolve};
 use server::run_server;
 use std::net::SocketAddr;
 
+mod bromberg_hash;
 mod client;
 mod protocol;
 mod server;

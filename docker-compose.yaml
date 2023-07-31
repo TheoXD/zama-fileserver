@@ -36,7 +36,7 @@ services:
         "--addr", "client:5000",
         "--server-addr", "server:8000"
       ]
-    
+
     ports:
       - "5000:5000/udp"
       - "5000:5000/tcp"

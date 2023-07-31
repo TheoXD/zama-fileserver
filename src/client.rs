@@ -1,6 +1,6 @@
-use crate::merkletree::*;
 use crate::protocol::Message;
 use crate::Opts;
+use blake3::Hash;
 use chrono::prelude::*;
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use std::net::SocketAddr;
@@ -14,27 +14,33 @@ use futures::executor::block_on;
 
 use std::cell::RefCell;
 
+use bromberg_sl2::{HashMatrix, hash_par};
+use crate::bromberg_hash::{matadd};
+
 thread_local! {
-    static ROOT: RefCell<OsString> = RefCell::new(OsString::new());
+    static ROOT: RefCell<HashMatrix> = RefCell::new(HashMatrix::default());
 }
 
 const DATA_DIR: &str = "./.client/";
 const N_OF_FILES: usize = 5;
 
-async fn save_file(filename: String, data: Vec<u8>, merkleproof: Vec<Vec<u8>>) -> String {
-    /* Convert from Vec<Vec<u8>> to Vec<OSString> and try to verify before saving */
-    let proof: Vec<OsString> = merkleproof.iter().map(|v| OsString::from(String::from_utf8(v.to_vec()).unwrap_or_default())).collect();
 
+
+async fn save_file(filename: String, data: Vec<u8>, proof: HashMatrix) -> String {
     let root = ROOT.with(|r| r.borrow().clone());
 
-    let is_proof_valid = MerkleTree::verify_data_with_proof(&data, proof, root).await;
+    let is_proof_valid = matadd(proof, hash_par(&data[..])) == root;
     println!("Is proof for file {} valid: {}", filename, is_proof_valid);
 
-    if let Ok(mut file) = tokio::fs::File::create(format!("./.client/{}", filename.clone())).await {
-        let _ = file.write_all(data.as_slice()).await;
-        format!("Saved file {}", filename)
+    if is_proof_valid {
+        if let Ok(mut file) = tokio::fs::File::create(format!("./.client/{}", filename.clone())).await {
+            let _ = file.write_all(data.as_slice()).await;
+            format!("Saved file {}", filename)
+        } else {
+            format!("Unable to save file {}", filename)
+        }
     } else {
-        format!("Unable to save file {}", filename)
+        format!("Proof for file {} is invalid", filename)
     }
 }
 
@@ -66,7 +72,7 @@ pub(crate) async fn run_client(outbound: UdpSink, inbound: UdpStream, opts: Opts
         inbound_demuxed = inbound_chan[0]
             ->  demux(|(msg, addr), var_args!(file_save_ch, errs_ch)|
                     match msg {
-                        Message::FileAck {filename, hash} => println!("Upload of file {} with hash {} was successful!", filename, hash),
+                        Message::FileAck {filename, hash} => println!("Upload of file {} with hash {} was successful!", filename, hash.to_hex()),
                         Message::File {filename, data, merkle_proof} => file_save_ch.give((filename, data, merkle_proof, addr)),
                         Message::DeleteFileAck {filename, deleted} => println!("File {} removed from server: {}", filename, deleted),
                         _ => errs_ch.give((msg, addr)),
@@ -111,13 +117,23 @@ pub(crate) async fn run_client(outbound: UdpSink, inbound: UdpStream, opts: Opts
         });
     });
 
-    /* Step 3: Create merkle tree locally and store root hash */
-    let mt = MerkleTree::from_folder(&Path::new(DATA_DIR)).await;
-    println!("Merkle tree root hash: {:#?}", mt.root);
-    println!("{:#?}", mt);
+    /* Step 3: Create root hash */
+    let root_hash = filenames.iter().map(|filename| {
+        block_on(async {
+            if let Ok(mut file) = tokio::fs::File::open(format!("./.client/{}", filename)).await {
+                let mut data = Vec::new();
+                let _ = file.read_to_end(&mut data).await;
+                hash_par(&data[..])
+            } else {
+                HashMatrix::default()
+            }
+        })
+    }).fold(HashMatrix::default(), |acc, hash| {
+        matadd(acc, hash)
+    });
+    println!("Created root hash: {:?} ", root_hash.to_hex());
     
     /* Step 4: Update ROOT hash and store it for the duration of the program */
-    let root_hash = mt.root.unwrap();
     ROOT.with(|r| r.replace(root_hash.clone()));
     println!("Updated root hash");
 

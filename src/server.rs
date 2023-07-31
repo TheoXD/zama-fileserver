@@ -1,4 +1,3 @@
-use crate::merkletree::MerkleTree;
 use crate::protocol::Message;
 use chrono::prelude::*;
 
@@ -16,8 +15,11 @@ use futures::executor::block_on;
 
 use std::cell::RefCell;
 
+use bromberg_sl2::{HashMatrix, hash_par};
+use crate::bromberg_hash::{get_folder_hash, matsub};
+
 thread_local! {
-    static MT: RefCell<MerkleTree> = RefCell::new(MerkleTree::default());
+    static ROOT: RefCell<HashMatrix> = RefCell::new(HashMatrix::default());
 }
 
 const DATA_DIR: &str = "./.server/";
@@ -29,13 +31,13 @@ fn save_file(filename: &str, data: &[u8]) -> Message {
 
     println!("Saved file {}", filename);
 
-    /* Update merkle tree */
-    block_on(async {
-        let merkle_tree = MerkleTree::from_folder(Path::new(DATA_DIR)).await;
-        MT.with(|mt| mt.replace(merkle_tree.clone()));
+    let folder_hash = block_on(async {
+        get_folder_hash(Path::new(DATA_DIR)).await
     });
+    //Update folder hash
+    ROOT.with(|r| *r.borrow_mut() = folder_hash);
 
-    Message::FileAck { filename: filename.to_string(), hash: blake3::hash(data).to_string() }
+    Message::FileAck { filename: filename.to_string(), hash: hash_par(data) }
 }
 
 fn delete_file(filename: &str) -> Message {
@@ -46,11 +48,11 @@ fn delete_file(filename: &str) -> Message {
         Ok(_) => {
             println!("Deleted file {}", filename);
 
-            /* Update merkle tree */
-            block_on(async {
-                let merkle_tree = MerkleTree::from_folder(Path::new(DATA_DIR)).await;
-                MT.with(|mt| mt.replace(merkle_tree.clone()));
+            let folder_hash = block_on(async {
+                get_folder_hash(Path::new(DATA_DIR)).await
             });
+            //Update folder hash
+            ROOT.with(|r| *r.borrow_mut() = folder_hash);
 
             Message::DeleteFileAck { filename: filename.to_string(), deleted: true }
         }
@@ -61,33 +63,21 @@ fn delete_file(filename: &str) -> Message {
     }
 }
 
-/**Read file stored on disk, get merkle proof and return Message::File */
+/**Read file stored on disk, generate merkle tree (TODO: make thread local) and return Message::File */
 fn read_file(filename: &str) -> Message {
     if let Ok(mut file) = File::open(Path::new(DATA_DIR).join(Path::new(filename))) {
         /* Read file from disk */
         let mut data = Vec::new();
         file.read_to_end(&mut data).unwrap();
+        let data_hash = hash_par(data.as_slice());
 
-        /* Generate merkle proof */
-        let p = block_on(async {
-            let merkle_tree = MT.with(|mt| mt.borrow().clone());
-            
-            let path = Path::new(DATA_DIR).join(Path::new(filename));
-            let proof = merkle_tree.get_proof(path.as_path()).await;
-
-            proof
-        });
-    
-        /* Convert merkle proof from OSString to Vec<Vec<u8>> */
-        let p = p.map(|p| 
-            p.into_iter()
-            .map(|s| s.into_string().unwrap_or_default().into_bytes())
-            .collect::<Vec<Vec<u8>>>()
-        );
+        //TODO: do substract
+        let folder_hash = ROOT.with(|r| r.borrow().clone());
+        let proof = matsub(folder_hash, data_hash);
 
         println!("Read file {}", filename);
         
-        Message::File { filename: filename.to_string() , data: data, merkle_proof: p.unwrap() }
+        Message::File { filename: filename.to_string() , data: data, merkle_proof: proof }
     } else {
         Message::FileNotFound { filename: filename.to_string() }
     }
