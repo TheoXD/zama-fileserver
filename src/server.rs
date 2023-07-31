@@ -63,7 +63,7 @@ fn delete_file(filename: &str) -> Message {
     }
 }
 
-/**Read file stored on disk, generate merkle tree (TODO: make thread local) and return Message::File */
+/**Read file stored on disk, get proof and return Message::File */
 fn read_file(filename: &str) -> Message {
     if let Ok(mut file) = File::open(Path::new(DATA_DIR).join(Path::new(filename))) {
         /* Read file from disk */
@@ -77,7 +77,7 @@ fn read_file(filename: &str) -> Message {
 
         println!("Read file {}", filename);
         
-        Message::File { filename: filename.to_string() , data: data, merkle_proof: proof }
+        Message::File { filename: filename.to_string() , data: data, proof: proof }
     } else {
         Message::FileNotFound { filename: filename.to_string() }
     }

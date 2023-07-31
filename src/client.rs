@@ -73,7 +73,7 @@ pub(crate) async fn run_client(outbound: UdpSink, inbound: UdpStream, opts: Opts
             ->  demux(|(msg, addr), var_args!(file_save_ch, errs_ch)|
                     match msg {
                         Message::FileAck {filename, hash} => println!("Upload of file {} with hash {} was successful!", filename, hash.to_hex()),
-                        Message::File {filename, data, merkle_proof} => file_save_ch.give((filename, data, merkle_proof, addr)),
+                        Message::File {filename, data, proof} => file_save_ch.give((filename, data, proof, addr)),
                         Message::DeleteFileAck {filename, deleted} => println!("File {} removed from server: {}", filename, deleted),
                         _ => errs_ch.give((msg, addr)),
                     }
@@ -82,9 +82,9 @@ pub(crate) async fn run_client(outbound: UdpSink, inbound: UdpStream, opts: Opts
         /* When we receive a message to file_save_ch containing file data we save the file locally */
         /* save_file() does verification of the data and the proof against the root hash stored in memory */
         inbound_demuxed[file_save_ch]
-                -> map(|(filename, data, merkleproof, _addr)| {
+                -> map(|(filename, data, proof, _addr)| {
                     block_on(async {
-                        save_file(filename, data, merkleproof).await
+                        save_file(filename, data, proof).await
                     })
                 } )
                 -> dest_file("client.log", true);

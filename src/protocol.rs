@@ -8,7 +8,7 @@ pub enum Message {
     FileUpload { filename: String, data: Vec<u8> },
     FileAck { filename: String, hash: HashMatrix },
     FileRequest { filename: String },
-    File { filename: String, data: Vec<u8>, merkle_proof: HashMatrix },
+    File { filename: String, data: Vec<u8>, proof: HashMatrix },
     FileNotFound { filename: String },
     DeleteFileRequest { filename: String },
     DeleteFileAck { filename: String, deleted: bool },
