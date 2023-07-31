@@ -13,8 +13,6 @@ mod client;
 mod protocol;
 mod server;
 
-mod merkletree;
-
 #[derive(Clone, ValueEnum, Debug)]
 enum Role {
     Client,
