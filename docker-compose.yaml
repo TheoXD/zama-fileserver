@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  server:
+    
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: "file-server"
+    command:
+      [
+        "./zama-fileserver",
+        "--role", "server",
+        "--addr", "server:8000"
+      ]
+
+    ports:
+      - "8000:8000/udp"
+      - "8000:8000/tcp"
+
+    expose:
+      - "8000/udp"
+      - "8000/tcp"
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: "file-client"
+    command:
+      [
+        "./zama-fileserver",
+        "--role", "client",
+        "--addr", "client:5000",
+        "--server-addr", "server:8000"
+      ]
+    
+    ports:
+      - "5000:5000/udp"
+      - "5000:5000/tcp"
+
+    expose:
+      - "5000/udp"
+      - "5000/tcp"
+
+    depends_on:
+      - server
